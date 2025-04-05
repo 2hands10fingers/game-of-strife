@@ -2,7 +2,6 @@ const std = @import("std");
 const print = std.debug.print;
 const mem = std.mem;
 const os = std.os;
-const person = @import("./person.zig");
 const rl = @import("raylib");
 pub fn main() void {
     // Initialization
@@ -27,7 +26,7 @@ pub fn main() void {
         //----------------------------------------------------------------------------------
         rl.beginDrawing();
         defer rl.endDrawing();
-        //draw grid
+
         for (1..screenHeight) |i| {
             const my_int = @as(i32, @intCast(i));
             const space_multiplier = 10;
