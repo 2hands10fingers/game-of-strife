@@ -1,9 +1,16 @@
 /// This is a simple implementation of Conway's Game of Life using Zig and raylib.
+/// /// Controls:
+/// - Space: Start/Stop simulation
+/// - C: Clear grid
+/// - L: Toggle logging
+/// - R: Randomize creating alive cells on the grid
+/// - Esc: Exit game
 const std = @import("std");
 const print = std.debug.print;
 const mem = std.mem;
 const os = std.os;
 const rl = @import("raylib");
+const random = std.crypto.random;
 
 /// *** KNOWN BUGS ***
 /// - Neighbor counting is not working properly.
@@ -22,15 +29,28 @@ pub fn main() void {
     var runGame = false;
     var isLoggingEnabled = false;
     const update_delay_ms = 100;
+    // var frame_counter: u32 = 0;
+    // const frames_per_update = 30; // Adjust for speed
 
     rl.initWindow(screenWidth, screenHeight, "game of strife");
     defer rl.closeWindow(); // Close window and OpenGL context
+    errdefer rl.closeWindow(); // Close window and OpenGL context
 
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    var myButtons: [num_rows * num_cols]Cell = .{Cell{ .x = 0, .y = 0, .alive = false }} ** (num_rows * num_cols);
+    var myButtons: [num_rows * num_cols]Cell = undefined;
+    for (0..num_rows) |row| {
+        for (0..num_cols) |col| {
+            const index = row * num_cols + col;
+            myButtons[index] = Cell{
+                .x = @intCast(row),
+                .y = @intCast(col),
+                .alive = false,
+            };
+        }
+    }
 
     while (!rl.windowShouldClose()) {
         rl.beginDrawing();
@@ -46,6 +66,29 @@ pub fn main() void {
         if (rl.isKeyPressed(.c)) { // Press c to clear the grid
             for (myButtons, 0..) |cell, i| {
                 myButtons[i] = Cell{ .x = cell.x, .y = cell.y, .alive = false };
+                const posX = padding + cell.y * (cell_width + padding);
+                const posY = padding + cell.x * (cell_height + padding);
+
+                rl.drawRectangle(posX, posY, cell_width, cell_height, .black);
+            }
+        }
+
+        if (rl.isKeyPressed(.r)) { // Press r to randomize the grid
+            // Clear the grid first
+            for (myButtons, 0..) |cell, i| {
+                myButtons[i] = Cell{ .x = cell.x, .y = cell.y, .alive = false };
+            }
+
+            // Add 100 random live cells
+            var cells_to_add: usize = 100;
+            while (cells_to_add > 0) {
+                const row = random.intRangeAtMost(usize, 0, num_rows - 1);
+                const col = random.intRangeAtMost(usize, 0, num_cols - 1);
+                const index = row * num_cols + col;
+                if (!myButtons[index].alive) {
+                    myButtons[index].alive = true;
+                    cells_to_add -= 1;
+                }
             }
         }
 
@@ -79,25 +122,26 @@ pub fn main() void {
                 const cellY: i32 = @intCast(i / num_cols);
                 const cellPosX = padding + cellY * (cell_width + padding);
                 const cellPosY = padding + cellX * (cell_height + padding);
-                
+
                 const posVector = rl.Vector2{ .x = mouse_pos.x, .y = mouse_pos.y };
                 const rectangle = rl.Rectangle{ .x = @as(f32, @floatFromInt(cellPosX)), .y = @as(f32, @floatFromInt(cellPosY)), .width = @as(f32, @floatFromInt(cell_width)), .height = @as(f32, @floatFromInt(cell_height)) };
                 // check if the mouse is inside the cell
 
                 if (isLoggingEnabled) {
-                    print("INDEX: {?}", .{index});
+                    print("INDEX: {?}", .{i});
                     print("Mouse Position: ( x:{d}, y:{d} )\n", .{ mouse_pos.x, mouse_pos.y });
                     print("Grid Box Position: ( x:{d}, y:{d} )\n", .{ gridBoxPosition, gridBoxPosition2 });
                     print("Index: {d}\n", .{i});
                     print("Cell Position: ( x:{d}, y:{d} )\n", .{ cellX, cellY });
                     print("{?}\n", .{&myButtons[i]});
-                    print("Cell neighbors: {d}\n", .{myButtons[i].countNeighbors(&myButtons, num_cols, num_rows)});
-                    print("Cell should stay alive: {?}\n", .{myButtons[i].staysAlive(myButtons[i].countNeighbors(&myButtons, num_cols, num_rows))});
+                    print("Cell neighbors: {d}\n", .{myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false)});
+                    print("Cell should stay alive: {?}\n", .{myButtons[i].staysAlive(myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false))});
                 }
 
                 // collision logic
                 if (rl.checkCollisionPointRec(posVector, rectangle) and !myButtons[i].alive) {
-                    print("Collision Detected\n", .{});
+                    // print("Collision Detected\n", .{});
+                    // print("Cell Position: ( x:{d}, y:{d} ), (cellX: {d}, cellY: {d}\n", .{ cellPosX, cellPosY, cellX, cellY });
                     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .red);
                 } else {
                     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
@@ -118,8 +162,9 @@ pub fn main() void {
         if (runGame) {
             var nextGrid: [num_rows * num_cols]Cell = myButtons; // Copy current state
             for (myButtons, 0..) |cell, i| {
-                const neighbors = cell.countNeighbors(&myButtons, num_cols, num_rows);
+                const neighbors = cell.countNeighbors(&myButtons, num_cols, num_rows, false);
                 const meetsAliveConditions = cell.staysAlive(neighbors);
+
                 nextGrid[i] = Cell{ .x = cell.x, .y = cell.y, .alive = meetsAliveConditions };
             }
             myButtons = nextGrid; // Update the main grid
@@ -130,15 +175,14 @@ pub fn main() void {
             const cellPosY = padding + cell.x * (cell_height + padding);
             if (cell.alive) {
                 rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
-            } else {
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
             }
+            // else {
+            //     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
+            // }
         }
 
         // slow down game loop to observe cellular automata behvaior
-        if (runGame) {
-            std.time.sleep(update_delay_ms * std.time.ns_per_ms);
-        }
+        if (runGame) std.time.sleep(update_delay_ms * std.time.ns_per_ms);
 
         rl.drawFPS(0, 0); // Draw FPS
         //----------------------------------------------------------------------------------
@@ -149,6 +193,7 @@ pub fn main() void {
 // credit to slightknack for the original code of this function
 // https://github.com/slightknack/scrabble/blob/master/src/main.zig
 fn toIndex(x: i32, y: i32, cols: usize, rows: usize) ?usize {
+    // print("toIndex: x: {d}, y: {d}, cols: {d}, rows: {d}\n", .{ x, y, cols, rows });
     if (0 > x or x >= rows) {
         return null;
     }
@@ -156,6 +201,7 @@ fn toIndex(x: i32, y: i32, cols: usize, rows: usize) ?usize {
         return null;
     }
     const index: usize = @intCast(y * @as(i32, @intCast(cols)) + x);
+
     return index;
 }
 
@@ -179,8 +225,11 @@ const Cell = struct {
     y: i32,
     alive: bool,
 
-    pub fn countNeighbors(self: Cell, grid: []Cell, cols: usize, rows: usize) u8 {
+    pub fn countNeighbors(self: Cell, grid: []Cell, cols: usize, rows: usize, print_ths: bool) u8 {
         var count: u8 = 0;
+        if (print_ths) {
+            print("GRID: {any}\n", .{grid});
+        }
         // print("Checking neighbors for cell at ({d}, {d})\n", .{ self.x, self.y });
         // Check the 8 neighbors
         for (offsets) |o| {
@@ -204,15 +253,18 @@ const Cell = struct {
         // Any live cell with more than three live neighbours dies, as if by overpopulation.
         // Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
         // if (neighbors > 0) print("NEIGHBORS: {d}\n", .{neighbors});
-
+        if (neighbors < 0) {
+            print("NEIGHBORS: {d}\n", .{neighbors});
+        }
         if (self.alive) {
             if (neighbors == 1) return false; // Underpopulation
             if (neighbors == 0) return false; // Underpopulation
             if (neighbors == 2) return true; // Lives on
             if (neighbors == 3) return true; // Lives on
             if (neighbors > 3) return false; // Overpopulation
+        }
 
-        } else if (neighbors == 3) return true; // Reproduction
+        if (!self.alive and neighbors == 3) return true; // Reproduction
         // if (neighbors == 4) return false; // Overpopulation
         return false; // Default case
     }
