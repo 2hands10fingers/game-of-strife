@@ -15,15 +15,15 @@ const random = std.crypto.random;
 /// *** KNOWN BUGS ***
 /// - Neighbor counting is not working properly.
 /// - Cell (0, 0) will not highlight or let me draw on it.
-pub fn main() void {
+pub fn main() !void {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const row_and_column_count = 20; // Row and column count determin winwdow size. I wouldn't go above 100 for now.
+    const row_and_column_count = 80; // Row and column count determin winwdow size. I wouldn't go above 100 for now.
     const num_rows = row_and_column_count;
     const num_cols = row_and_column_count;
     const padding = 2;
-    const cell_width = 20;
-    const cell_height = 20;
+    const cell_width = 10;
+    const cell_height = 10;
     const screenWidth = padding + num_cols * (cell_width + padding);
     const screenHeight = padding + num_rows * (cell_height + padding);
     var runGame = false;
@@ -80,7 +80,7 @@ pub fn main() void {
             }
 
             // Add 100 random live cells
-            var cells_to_add: usize = 100;
+            var cells_to_add: usize = 800;
             while (cells_to_add > 0) {
                 const row = random.intRangeAtMost(usize, 0, num_rows - 1);
                 const col = random.intRangeAtMost(usize, 0, num_cols - 1);
@@ -109,6 +109,16 @@ pub fn main() void {
             }
         }
 
+        for (myButtons) |cell| {
+            const cellPosX = padding + cell.y * (cell_width + padding);
+            const cellPosY = padding + cell.x * (cell_height + padding);
+            if (cell.alive) {
+                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
+            } else {
+                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
+            }
+        }
+
         // determines where if a cell index has been found and handles the collision logic
         if (!runGame) {
             const yInt = @as(i32, @intFromFloat(mouse_pos.y));
@@ -128,20 +138,24 @@ pub fn main() void {
                 // check if the mouse is inside the cell
 
                 if (isLoggingEnabled) {
-                    print("INDEX: {?}", .{i});
-                    print("Mouse Position: ( x:{d}, y:{d} )\n", .{ mouse_pos.x, mouse_pos.y });
-                    print("Grid Box Position: ( x:{d}, y:{d} )\n", .{ gridBoxPosition, gridBoxPosition2 });
-                    print("Index: {d}\n", .{i});
-                    print("Cell Position: ( x:{d}, y:{d} )\n", .{ cellX, cellY });
-                    print("{?}\n", .{&myButtons[i]});
-                    print("Cell neighbors: {d}\n", .{myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false)});
-                    print("Cell should stay alive: {?}\n", .{myButtons[i].staysAlive(myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false))});
+                    rl.drawRectangle(xInt + 10, yInt + 10, 175, 100, .blue);
+                    // const alloc = std.heap.page_allocator;
+
+                    // var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
+                    // defer _ = gpa.deinit();
+                    // const alloc = gpa.allocator();
+                    // const mousePos = try std.fmt.allocPrintZ(alloc, "Mouse Position: {d}, {d}", .{ xInt, yInt });
+                    // defer alloc.free(mousePos);
+
+                    var buffer: [200]u8 = undefined;
+                    const neighorCount = myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false);
+                    const cellShouldStayAlive = myButtons[i].staysAlive(myButtons[i].countNeighbors(&myButtons, num_cols, num_rows, false));
+                    const mousePos = std.fmt.bufPrintZ(&buffer, "Mouse Position: {d}, {d}\nGrid Box Position: ( x:{d}, y:{d} )\nIndex: {d}\nCell neighbors: {d}\nCell should stay alive: {any}\nIs alive: {any}", .{ xInt, yInt, gridBoxPosition, gridBoxPosition2, i, neighorCount, cellShouldStayAlive, myButtons[i].alive }) catch "Error";
+                    rl.drawText(mousePos, xInt + 20, yInt + 25, 1, .black);
                 }
 
                 // collision logic
                 if (rl.checkCollisionPointRec(posVector, rectangle) and !myButtons[i].alive) {
-                    // print("Collision Detected\n", .{});
-                    // print("Cell Position: ( x:{d}, y:{d} ), (cellX: {d}, cellY: {d}\n", .{ cellPosX, cellPosY, cellX, cellY });
                     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .red);
                 } else {
                     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
@@ -169,18 +183,6 @@ pub fn main() void {
             }
             myButtons = nextGrid; // Update the main grid
         }
-
-        for (myButtons) |cell| {
-            const cellPosX = padding + cell.y * (cell_width + padding);
-            const cellPosY = padding + cell.x * (cell_height + padding);
-            if (cell.alive) {
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
-            }
-            // else {
-            //     rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
-            // }
-        }
-
         // slow down game loop to observe cellular automata behvaior
         if (runGame) std.time.sleep(update_delay_ms * std.time.ns_per_ms);
 
@@ -230,14 +232,12 @@ const Cell = struct {
         if (print_ths) {
             print("GRID: {any}\n", .{grid});
         }
-        // print("Checking neighbors for cell at ({d}, {d})\n", .{ self.x, self.y });
-        // Check the 8 neighbors
+
         for (offsets) |o| {
             const newX = self.x + o.dx;
             const newY = self.y + o.dy;
 
             if (toIndex(newX, newY, cols, rows)) |index| {
-                // print("Checking neighbor at ({d}, {d}) -> Index: {d}, Alive: {?}\n", .{ newX, newY, index, grid[index].alive });
                 if (grid[index].alive) {
                     count += 1;
                 }
@@ -248,24 +248,10 @@ const Cell = struct {
     }
 
     pub fn staysAlive(self: Cell, neighbors: u8) bool {
-        // Any live cell with fewer than two live neighbours dies, as if by underpopulation.
-        // Any live cell with two or three live neighbours lives on to the next generation.
-        // Any live cell with more than three live neighbours dies, as if by overpopulation.
-        // Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
-        // if (neighbors > 0) print("NEIGHBORS: {d}\n", .{neighbors});
-        if (neighbors < 0) {
-            print("NEIGHBORS: {d}\n", .{neighbors});
-        }
         if (self.alive) {
-            if (neighbors == 1) return false; // Underpopulation
-            if (neighbors == 0) return false; // Underpopulation
-            if (neighbors == 2) return true; // Lives on
-            if (neighbors == 3) return true; // Lives on
-            if (neighbors > 3) return false; // Overpopulation
+            return neighbors == 2 or neighbors == 3;
+        } else {
+            return neighbors == 3;
         }
-
-        if (!self.alive and neighbors == 3) return true; // Reproduction
-        // if (neighbors == 4) return false; // Overpopulation
-        return false; // Default case
     }
 };
