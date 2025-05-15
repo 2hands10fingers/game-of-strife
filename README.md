@@ -9,3 +9,6 @@ WORK IN PROGRESS
 ```
 $   zig fetch --save git+https://github.com/Not-Nik/raylib-zig#devel
 ```
+
+
+[game-of-strife-presentation.webm](https://github.com/user-attachments/assets/15e8207a-7996-4192-b407-12b375d373a5)
