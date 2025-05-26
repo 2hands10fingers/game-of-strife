@@ -1,123 +1,120 @@
+/// This is a simple implementation of Conway's Game of Life using Zig and raylib.
+// Controls:
+// - Space: Start/Stop simulation
+// - C: Clear grid
+// - L: Toggle logging
+// - R: Randomize creating alive cells on the grid
+// - D: (Draw Mode) - While holding this key, draw cells in a fluid motion while clicking
+// - Esc: Exit game
 const std = @import("std");
 const print = std.debug.print;
 const mem = std.mem;
 const os = std.os;
 const rl = @import("raylib");
-
-pub fn main() void {
+const random = std.crypto.random;
+const automata = @import("./automata.zig");
+const Cell = automata.Cell;
+const indexing = @import("./utils/indexing.zig");
+const grid = @import("./objects/grid.zig");
+const Grid = grid.Grid;
+/// *** KNOWN BUGS ***
+/// - Neighbor counting is not working properly.
+pub fn main() !void {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const row_and_column_count = 20; // Row and column count determin winwdow size. I wouldn't go above 100 for now.
-    const num_rows = row_and_column_count;
-    const num_cols = row_and_column_count;
-    const padding = 1;
-    const cell_width = 20;
-    const cell_height = 20;
-    const screenWidth = padding + num_cols * (cell_width + padding);
-    const screenHeight = padding + num_rows * (cell_height + padding);
+    const realSceenH = rl.getScreenHeight();
+    const realScrenW = rl.getScreenWidth();
 
-    rl.initWindow(screenWidth, screenHeight, "game of strife");
-    defer rl.closeWindow(); // Close window and OpenGL context
+    //game states
+    var runGame = false;
+    var isLoggingEnabled = false;
+    var isGridOn = true;
+    var isFPSShowing = false;
+    var gridAllocator = std.heap.page_allocator;
+    var gameGrid = try Grid.init(
+        400,
+        400,
+        1,
+        4,
+        4,
+        30500,
+        &gridAllocator,
+    );
+    defer gameGrid.deinit();
 
-    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
+    rl.initWindow(
+        realScrenW,
+        realSceenH,
+        "GAME OF STRIFE",
+    );
+    defer rl.closeWindow();
+    errdefer rl.closeWindow();
+    rl.setTargetFPS(60);
+
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    var myButtons: [num_rows * num_cols]Cell = .{Cell{ .x = 0, .y = 0, .alive = false }} ** (num_rows * num_cols);
-
-    while (!rl.windowShouldClose()) { // Detect window close button or ESC key
-        // Draw
-        //----------------------------------------------------------------------------------
+    while (!rl.windowShouldClose()) {
         rl.beginDrawing();
         defer rl.endDrawing();
-        rl.clearBackground(.gray);
+
+        const background = if (isGridOn) rl.Color.gray else rl.Color.black;
+        rl.clearBackground(background);
+
+        if (rl.isKeyPressed(.space)) { // Press space to start the game
+            runGame = !runGame;
+            isGridOn = if (runGame) false else true;
+        }
+
+        if (rl.isKeyPressed(.escape)) // Press Esc to exit the game
+            std.process.exit(1);
+
+        if (rl.isKeyPressed(.c)) // Press c to clear the grid
+            gameGrid.clearGrid();
+
+        if (rl.isKeyPressed(.g)) // pess g to toggle grid
+            isGridOn = !isGridOn;
+
+        if (rl.isKeyPressed(.f)) // press f to show the FPS
+            isFPSShowing = !isFPSShowing;
+
+        if (rl.isKeyPressed(.r)) // Press r to randomize the grid
+            gameGrid.addRandomCells();
+
+        if (isFPSShowing) rl.drawFPS(0, 0); // Draw FPS
+        if (rl.isKeyPressed(.l)) // Press l to toggle logging
+            isLoggingEnabled = !isLoggingEnabled;
+
+        // creates grid
+        gameGrid.initialGridPainting();
+        gameGrid.drawGrid();
 
         const mouse_pos = rl.getMousePosition();
-
-        print("Mouse Position: ( x:{d}, y:{d} )\n", .{ mouse_pos.x, mouse_pos.y });
-
-        //creates grid
-        for (0..num_rows) |x| {
-            for (0..num_cols) |y| {
-                const yCast: i32 = @intCast(x);
-                const xCast: i32 = @intCast(y);
-                const posX = padding + yCast * (cell_width + padding);
-                const posY = padding + xCast * (cell_height + padding);
-
-                rl.drawRectangle(posX, posY, cell_width, cell_height, .black);
-            }
-        }
-
-        const yInt = @as(i32, @intFromFloat(mouse_pos.y));
-        const xInt = @as(i32, @intFromFloat(mouse_pos.x));
-
-        const gridBoxPosition = @divFloor(yInt, (cell_height + padding));
-        const gridBoxPosition2 = @divFloor(xInt, (cell_width + padding));
-        const index = toIndex(gridBoxPosition, gridBoxPosition2, num_cols, num_rows);
-        print("Grid Box Position: ( x:{d}, y:{d} )\n", .{ gridBoxPosition, gridBoxPosition2 });
         // determines where if a cell index has been found and handles the collision logic
-        if (index) |i| {
-            const cellX: i32 = @intCast(i % num_cols);
-            const cellY: i32 = @intCast(i / num_cols);
-            const cellPosX = padding + cellY * (cell_width + padding);
-            const cellPosY = padding + cellX * (cell_height + padding);
-            const cellPosXF32 = @as(f32, @floatFromInt(cellPosX));
-            const cellPosYF32 = @as(f32, @floatFromInt(cellPosY));
-            const cellWidthF32 = @as(f32, @floatFromInt(cell_width));
-            const cellHeightF32 = @as(f32, @floatFromInt(cell_height));
-            // check if the mouse is inside the cell
-            const hasCollision = rl.checkCollisionPointRec(.{ .x = mouse_pos.x, .y = mouse_pos.y }, .{ .x = cellPosXF32, .y = cellPosYF32, .width = cellWidthF32, .height = cellHeightF32 });
+        if (!runGame) {
+            const index = gameGrid.calculateGridIndex(mouse_pos);
 
-            print("Index: {d}\n", .{i});
-            print("Cell Position: ( x:{d}, y:{d} )\n", .{ cellX, cellY });
-            print("{?}\n", .{myButtons[i]});
-            // collision logic
-            if (hasCollision and !myButtons[i].alive) {
-                print("Collision Detected\n", .{});
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .red);
-            } else if (myButtons[i].alive) { //TODO: Check if I need this
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
-            } else {
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .black);
-            }
+            if (index) |i| {
+                const mousePosAttrs = gameGrid.calculateCollisionAttributes(
+                    i,
+                    mouse_pos,
+                );
+                const isPaintingOnGrid = (rl.isMouseButtonDown(.left) and rl.isKeyDown(.d) or rl.isMouseButtonPressed(.left));
 
-            if (rl.isMouseButtonDown(.left)) {
-                // make the cell alive
-                myButtons[i] = Cell{ .x = cellX, .y = cellY, .alive = true };
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
+                // collision logic
+                gameGrid.executeCollisionLogic(
+                    i,
+                    mousePosAttrs,
+                );
+
+                if (isPaintingOnGrid)
+                    gameGrid.myButtons[i].toggleCellLife();
             }
-        } else {
-            print("Index: null\n", .{});
         }
 
-        //update cell states
-        for (myButtons) |cell| {
-            if (cell.alive) {
-                const cellPosX = padding + cell.y * (cell_width + padding);
-                const cellPosY = padding + cell.x * (cell_height + padding);
-                rl.drawRectangle(cellPosX, cellPosY, cell_width, cell_height, .blue);
-            }
+        if (runGame) {
+            gameGrid.updateGridMovements();
         }
         //----------------------------------------------------------------------------------
     }
 }
-
-// Given a row and a column, find the index of the tile in the tile list
-// credit to slightknack for the original code of this function
-// https://github.com/slightknack/scrabble/blob/master/src/main.zig
-fn toIndex(x: i32, y: i32, cols: usize, rows: usize) ?usize {
-    if (0 > x or x >= cols) {
-        return null;
-    }
-    if (0 > y or y >= rows) {
-        return null;
-    }
-    const index: usize = @intCast(y * @as(i32, @intCast(cols)) + x);
-    return index;
-}
-
-const Cell = struct {
-    x: i32,
-    y: i32,
-    alive: bool,
-};
