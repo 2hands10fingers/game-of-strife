@@ -1,3 +1,10 @@
+/// This is a simple implementation of Conway's Game of Life using Zig and raylib.
+/// /// Controls:
+/// - Space: Start/Stop simulation
+/// - C: Clear grid
+/// - L: Toggle logging
+/// - R: Randomize creating alive cells on the grid
+/// - Esc: Exit game
 const std = @import("std");
 const print = std.debug.print;
 const mem = std.mem;
@@ -103,3 +110,79 @@ pub fn main() !void {
         }
     }
 }
+
+// Given a row and a column, find the index of the tile in the tile list
+// credit to slightknack for the original code of this function
+// https://github.com/slightknack/scrabble/blob/master/src/main.zig
+fn toIndex(
+    x: i32,
+    y: i32,
+    cols: usize,
+    rows: usize,
+) ?usize {
+    if (0 > x or x >= cols) {
+        return null;
+    }
+    if (0 > y or y >= rows) {
+        return null;
+    }
+    const index: usize = @intCast(y * @as(i32, @intCast(cols)) + x);
+
+    return index;
+}
+
+const Offset = struct {
+    dx: i32,
+    dy: i32,
+};
+const offsets: [8]Offset = [_]Offset{
+    Offset{ .dx = -1, .dy = -1 },
+    Offset{ .dx = 0, .dy = -1 },
+    Offset{ .dx = 1, .dy = -1 },
+    Offset{ .dx = -1, .dy = 0 },
+    Offset{ .dx = 1, .dy = 0 },
+    Offset{ .dx = -1, .dy = 1 },
+    Offset{ .dx = 0, .dy = 1 },
+    Offset{ .dx = 1, .dy = 1 },
+};
+
+const Cell = struct {
+    x: i32,
+    y: i32,
+    alive: bool,
+
+    pub fn countNeighbors(
+        self: Cell,
+        grid: []Cell,
+        cols: usize,
+        rows: usize,
+        print_ths: bool,
+    ) u8 {
+        var count: u8 = 0;
+        if (print_ths) {
+            print("GRID: {any}\n", .{grid});
+        }
+
+        for (offsets) |o| {
+            const newX = self.x + o.dx;
+            const newY = self.y + o.dy;
+            const cellndex = toIndex(newX, newY, cols, rows);
+            
+            if (cellndex) |index| {
+                if (grid[index].alive) {
+                    count += 1;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    pub fn staysAlive(self: Cell, neighbors: u8) bool {
+        if (self.alive) {
+            return neighbors == 2 or neighbors == 3;
+        } else {
+            return neighbors == 3;
+        }
+    }
+};

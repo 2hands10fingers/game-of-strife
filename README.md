@@ -28,7 +28,3 @@ $   zig fetch --save git+https://github.com/Not-Nik/raylib-zig#devel
 - F: Toggle FPS display
 - Left Click: Toggle cell life (alive/dead) on the grid
 - Esc: Exit game
-
-```
-
-```
