@@ -1,11 +1,9 @@
 const std = @import("std");
 const print = std.debug.print;
-const indexing = @import("./utils/indexing.zig");
+const indexing = @import("../utils/indexing.zig");
 
-const Offset = struct {
-    dx: i32,
-    dy: i32,
-};
+const Offset = struct { dx: i32, dy: i32 };
+
 const offsets: [8]Offset = [_]Offset{
     Offset{ .dx = -1, .dy = -1 },
     Offset{ .dx = 0, .dy = -1 },
@@ -32,7 +30,7 @@ pub const Cell = struct {
 
         for (offsets) |o| {
             const cellndex = indexing.toIndex(
-                self.x + o.dx, //new x position
+                self.x + o.dx, // new x position
                 self.y + o.dy, // new y position
                 cols,
                 rows,
@@ -49,9 +47,7 @@ pub const Cell = struct {
     }
 
     pub fn toggleCellLife(self: *Cell) void {
-        const life = !self.alive;
-
-        self.alive = life;
+        self.alive = !self.alive;
     }
 
     pub fn staysAlive(self: Cell, neighbors: u8) bool {

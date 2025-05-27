@@ -1,4 +1,4 @@
-const automata = @import("../automata.zig");
+const automata = @import("./automata.zig");
 const indexing = @import("../utils/indexing.zig");
 const rl = @import("raylib");
 const std = @import("std");
@@ -19,6 +19,7 @@ pub const Grid = struct {
     cell_width: i32,
     cell_height: i32,
     allocator: *std.mem.Allocator,
+    rainbowMode: bool = false,
 
     pub fn init(
         rowCount: comptime_int,
@@ -54,11 +55,15 @@ pub const Grid = struct {
             .cell_height = cell_height,
             .cells_to_add = cells_to_add,
             .allocator = allocator,
+            .rainbowMode = false,
         };
     }
 
-    pub fn executeCollisionLogic(self: *Grid, cellIndex: usize, mousePosAttributes: MousPositionAttributes) void {
-        //TODO: method name a bit broad. Really just handling hover state of the cell.
+    pub fn toggleRainbowMode(self: *Grid) void {
+        self.rainbowMode = !self.rainbowMode;
+    }
+
+    fn handleCellState(self: *Grid, cellIndex: usize, mousePosAttributes: MousPositionAttributes) void {
         const hasCollision = rl.checkCollisionPointRec(
             mousePosAttributes.vectorPosition,
             mousePosAttributes.rectangle,
@@ -78,6 +83,10 @@ pub const Grid = struct {
             self.cell_height,
             cellColor,
         );
+    }
+
+    pub fn executeCollisionLogic(self: *Grid, cellIndex: usize, mousePosAttributes: MousPositionAttributes) void {
+        self.handleCellState(cellIndex, mousePosAttributes);
     }
 
     pub fn generateRandom8bitInteger(_: Grid) u8 {
@@ -147,20 +156,23 @@ pub const Grid = struct {
         for (self.myButtons) |c| {
             const cellPosX = self.calculatePosition(c.y, self.cell_width);
             const cellPosY = self.calculatePosition(c.x, self.cell_height);
-            // const lifeColor = if (c.alive) rl.Color{
-            //     .r = self.generateRandom8bitInteger(),
-            //     .g = self.generateRandom8bitInteger(),
-            //     .b = self.generateRandom8bitInteger(),
-            //     .a = self.generateRandom8bitInteger(),
-            // } else rl.Color.black;
+
+            const randomColor = if (c.alive) rl.Color{
+                .r = self.generateRandom8bitInteger(),
+                .g = self.generateRandom8bitInteger(),
+                .b = self.generateRandom8bitInteger(),
+                .a = 255,
+            } else rl.Color.black;
             const lifeColor = if (c.alive) rl.Color.green else rl.Color.black;
-            //TODO: get life color may need to come from cell.
+            const cellColor = if (self.rainbowMode) randomColor else lifeColor;
+
+            // TODO: get life color may need to come from cell.
             rl.drawRectangle(
                 cellPosX,
                 cellPosY,
                 self.cell_width,
                 self.cell_height,
-                lifeColor,
+                cellColor,
             );
         }
     }
@@ -220,7 +232,9 @@ pub const Grid = struct {
     }
 
     // Logic to update cell movments
-    pub fn updateGridMovements(self: *Grid) void {
+    pub fn updateGridMovements(self: *Grid) !void {
+        const alloc = std.heap.page_allocator;
+        var nextGrid = try alloc.alloc(Cell, self.num_rows * self.num_cols);
         for (self.myButtons, 0..) |c, i| {
             const neighbors = c.countNeighbors(
                 self.myButtons,
@@ -228,21 +242,16 @@ pub const Grid = struct {
                 self.num_rows,
             );
 
-            self.myButtons[i] = Cell{
+            nextGrid[i] = Cell{
                 .x = c.x,
                 .y = c.y,
                 .alive = c.staysAlive(neighbors),
             };
         }
+        const oldGrid = self.myButtons;
+        self.myButtons = nextGrid;
+        alloc.free(oldGrid);
     }
-
-    // pub fn toggleCellLife(self: *Grid, cellIndex: usize) void {
-    //     //TODO: Make this a cell method.
-    //     const selectedCell = self.myButtons[cellIndex];
-    //     const life = !selectedCell.alive;
-
-    //     self.myButtons[cellIndex].alive = life;
-    // }
 
     pub fn deinit(self: *Grid) void {
         self.allocator.free(self.myButtons);
