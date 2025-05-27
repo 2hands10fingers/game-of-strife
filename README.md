@@ -3,7 +3,7 @@
 Conway's Game of Life written in Zig with some added rules.
 
 > [!WARNING]  
-> Critical content demanding immediate user attention due to potential risks.
+> Currently only implementing Conway's Game of Life. No added rules at this time of development.
 
 [game-of-strife-presentation.webm](https://github.com/user-attachments/assets/15e8207a-7996-4192-b407-12b375d373a5)
 
