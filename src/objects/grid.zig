@@ -2,8 +2,12 @@ const automata = @import("./automata.zig");
 const indexing = @import("../utils/indexing.zig");
 const rl = @import("raylib");
 const std = @import("std");
+const generators = @import("../utils/generators.zig");
 const Cell = automata.Cell;
+const Coordinates = automata.Coordinates;
 const random = std.crypto.random;
+const assert = std.debug.assert;
+const colors = @import("../utils/colors.zig");
 
 const MousPositionAttributes = struct {
     rectangle: rl.Rectangle,
@@ -11,10 +15,10 @@ const MousPositionAttributes = struct {
 };
 
 pub const Grid = struct {
-    num_rows: u64,
-    num_cols: u64,
-    cells_to_add: u64,
-    myButtons: []Cell,
+    num_rows: i32,
+    num_cols: i32,
+    cells_to_add: i32,
+    myButtons: std.AutoHashMap(automata.Coordinates, Cell),
     padding: i32,
     cell_width: i32,
     cell_height: i32,
@@ -27,27 +31,32 @@ pub const Grid = struct {
         padding: u8,
         cell_width: i32,
         cell_height: i32,
-        cells_to_add: u64,
+        cells_to_add: i32,
         allocator: *std.mem.Allocator,
     ) !Grid {
-        std.debug.assert(rowCount == colCount);
-        const total = rowCount * colCount;
-        const buttons = try allocator.alloc(Cell, total);
-        // var buttons: [rowCount * colCount]Cell = undefined;
+        var cellMap = std.AutoHashMap(automata.Coordinates, Cell).init(allocator.*);
+
         for (0..rowCount) |row| {
             for (0..colCount) |col| {
-                const index = col * colCount + row;
 
-                buttons[index] = Cell{
+                // const index = col * colCount + row;
+                const coords = automata.Coordinates{
                     .x = @as(i32, @intCast(row)),
                     .y = @as(i32, @intCast(col)),
-                    .alive = false,
                 };
+                const cell = Cell{
+                    .coords = coords,
+                    .padding = padding,
+                    .width = cell_width,
+                    .height = cell_height,
+                };
+
+                try cellMap.put(coords, cell);
             }
         }
 
         return .{
-            .myButtons = buttons,
+            .myButtons = cellMap,
             .num_rows = rowCount,
             .num_cols = colCount,
             .padding = padding,
@@ -55,7 +64,6 @@ pub const Grid = struct {
             .cell_height = cell_height,
             .cells_to_add = cells_to_add,
             .allocator = allocator,
-            .rainbowMode = false,
         };
     }
 
@@ -63,169 +71,103 @@ pub const Grid = struct {
         self.rainbowMode = !self.rainbowMode;
     }
 
-    fn handleCellState(self: *Grid, cellIndex: usize, mousePosAttributes: MousPositionAttributes) void {
+    fn handleCellState(_: Grid, cell: *Cell) void {
+        //TODO: implement game state logic so to maintain generic method.
+        const isCellDead = !cell.alive;
+        const cellColor = if (isCellDead) colors.red else colors.black;
+
+        cell.draw(cellColor);
+    }
+
+    pub fn executeCollisionLogic(self: *Grid, cell: *Cell, mousePosAttributes: MousPositionAttributes) void {
         const hasCollision = rl.checkCollisionPointRec(
             mousePosAttributes.vectorPosition,
             mousePosAttributes.rectangle,
         );
-        const x = self.myButtons[cellIndex].x;
-        const y = self.myButtons[cellIndex].y;
-        const cellPosX = self.calculatePosition(y, self.cell_width);
-        const cellPosY = self.calculatePosition(x, self.cell_height);
 
-        const isCellDead = !self.myButtons[cellIndex].alive;
-        const cellColor = if (hasCollision and isCellDead) rl.Color.red else rl.Color.black;
-
-        rl.drawRectangle(
-            cellPosX,
-            cellPosY,
-            self.cell_width,
-            self.cell_height,
-            cellColor,
-        );
+        if (hasCollision) {
+            self.handleCellState(cell);
+        }
     }
 
-    pub fn executeCollisionLogic(self: *Grid, cellIndex: usize, mousePosAttributes: MousPositionAttributes) void {
-        self.handleCellState(cellIndex, mousePosAttributes);
+    pub fn getCell(self: *Grid, coords: Coordinates) ?*Cell {
+        return self.myButtons.getPtr(coords);
     }
 
-    pub fn generateRandom8bitInteger(_: Grid) u8 {
-        return random.intRangeAtMost(u8, 0, 255);
-    }
+    pub fn calculateGridCoordinates(self: *Grid, mousePos: rl.Vector2) Coordinates {
+        const yInt = @as(i32, @intFromFloat(mousePos.y));
+        const xInt = @as(i32, @intFromFloat(mousePos.x));
 
-    pub fn calculatePosition(self: Grid, cellPos: i32, cellDimension: i32) i32 {
-        //TODO: Potentially make this a cell method
-        return self.padding + cellPos * (cellDimension + self.padding);
-    }
-
-    pub fn calculateGridIndex(self: *Grid, mouse_pos: rl.Vector2) ?usize {
-        const yInt = @as(i32, @intFromFloat(mouse_pos.y));
-        const xInt = @as(i32, @intFromFloat(mouse_pos.x));
         const gridBoxPosition = @divFloor(yInt, (self.cell_height + self.padding));
         const gridBoxPosition2 = @divFloor(xInt, (self.cell_width + self.padding));
-        const index = indexing.toIndex(
-            gridBoxPosition,
-            gridBoxPosition2,
-            self.num_cols,
-            self.num_rows,
-        );
+        const coords = Coordinates{
+            .x = gridBoxPosition,
+            .y = gridBoxPosition2,
+        };
 
-        return index;
+        return coords;
     }
 
-    pub fn calculateCollisionAttributes(self: *Grid, cellIndex: usize, mouse_pos: rl.Vector2) MousPositionAttributes {
-        const cellX: i32 = @intCast(cellIndex % self.num_cols);
-        const cellY: i32 = @intCast(cellIndex / self.num_cols);
-        const cellPosX = self.calculatePosition(cellY, self.cell_width);
-        const cellPosY = self.calculatePosition(cellX, self.cell_height);
+    pub fn calculateCollisionAttributes(_: Grid, cell: *Cell, vec2: rl.Vector2) MousPositionAttributes {
+        const position = cell.getSelfPosition();
 
-        const posVector = rl.Vector2{
-            .x = mouse_pos.x,
-            .y = mouse_pos.y,
-        };
-        const rectangle = rl.Rectangle{
-            .x = @as(f32, @floatFromInt(cellPosX)),
-            .y = @as(f32, @floatFromInt(cellPosY)),
-            .width = @as(f32, @floatFromInt(self.cell_width)),
-            .height = @as(f32, @floatFromInt(self.cell_height)),
+        const rectangle: rl.Rectangle = .{
+            .x = @as(f32, @floatFromInt(position.x)),
+            .y = @as(f32, @floatFromInt(position.y)),
+            .width = @as(f32, @floatFromInt(cell.width)),
+            .height = @as(f32, @floatFromInt(cell.height)),
         };
 
-        return .{ .rectangle = rectangle, .vectorPosition = posVector };
+        return .{ .rectangle = rectangle, .vectorPosition = vec2 };
     }
 
     pub fn initialGridPainting(self: *Grid) void {
-        for (0..self.num_rows) |x| {
-            for (0..self.num_cols) |y| {
-                const yCast: i32 = @as(i32, @intCast(x));
-                const xCast: i32 = @as(i32, @intCast(y));
-                const posX = self.calculatePosition(yCast, self.cell_width);
-                const posY = self.calculatePosition(xCast, self.cell_height);
+        var it = self.myButtons.valueIterator();
 
-                rl.drawRectangle(
-                    posX,
-                    posY,
-                    self.cell_width,
-                    self.cell_height,
-                    .black,
-                );
-            }
+        while (it.next()) |c| {
+            c.draw(.black);
         }
     }
 
     pub fn drawGrid(self: *Grid) void {
-        for (self.myButtons) |c| {
-            const cellPosX = self.calculatePosition(c.y, self.cell_width);
-            const cellPosY = self.calculatePosition(c.x, self.cell_height);
+        var it = self.myButtons.valueIterator();
 
-            const randomColor = if (c.alive) rl.Color{
-                .r = self.generateRandom8bitInteger(),
-                .g = self.generateRandom8bitInteger(),
-                .b = self.generateRandom8bitInteger(),
-                .a = 255,
-            } else rl.Color.black;
-            const lifeColor = if (c.alive) rl.Color.green else rl.Color.black;
-            const cellColor = if (self.rainbowMode) randomColor else lifeColor;
-
-            // TODO: get life color may need to come from cell.
-            rl.drawRectangle(
-                cellPosX,
-                cellPosY,
-                self.cell_width,
-                self.cell_height,
-                cellColor,
-            );
+        while (it.next()) |c| {
+            if (self.rainbowMode and c.alive) {
+                const randomColor = colors.randomColor(null);
+                c.draw(randomColor);
+            } else {
+                const lifeColor = if (c.alive) colors.green else colors.black;
+                c.draw(lifeColor);
+            }
         }
     }
 
     pub fn clearGrid(self: *Grid) void {
-        for (self.myButtons, 0..) |c, i| {
-            self.myButtons[i] = .{
-                .x = c.x,
-                .y = c.y,
-                .alive = false,
-            };
+        var it = self.myButtons.valueIterator();
 
-            const posX = self.calculatePosition(c.y, self.cell_width);
-            const posY = self.calculatePosition(c.x, self.cell_height);
-
-            rl.drawRectangle(
-                posX,
-                posY,
-                self.cell_width,
-                self.cell_height,
-                .black,
-            );
+        while (it.next()) |c| {
+            c.resetState();
         }
     }
 
+    fn getRandomCoordinates(self: *Grid) Coordinates {
+        const row = rl.getRandomValue(0, self.num_rows - 1);
+        const col = rl.getRandomValue(0, self.num_cols - 1);
+
+        return .{ .x = row, .y = col };
+    }
+
     pub fn addRandomCells(self: *Grid) void {
-        // Clear the grid first
-        // const initial_cell_count = self.cells_to_add;
         var cells_to_add = self.cells_to_add;
-        std.debug.print("{d}", .{cells_to_add});
-        for (self.myButtons, 0..) |c, i| {
-            self.myButtons[i] = .{
-                .x = c.x,
-                .y = c.y,
-                .alive = false,
-            };
-        }
+        self.clearGrid();
 
         while (cells_to_add > 0) {
-            const row = random.intRangeAtMost(
-                usize,
-                0,
-                self.num_rows - 1,
-            );
-            const col = random.intRangeAtMost(
-                usize,
-                0,
-                self.num_cols - 1,
-            );
-            const index = row * self.num_cols + col;
+            const cell = self.getCell(self.getRandomCoordinates());
 
-            if (!self.myButtons[index].alive) {
-                self.myButtons[index].alive = true;
+            if (cell) |c| {
+                if (c.alive) continue; // Skip if the cell is already alive
+                c.alive = true;
                 cells_to_add -= 1;
             }
         }
@@ -233,27 +175,19 @@ pub const Grid = struct {
 
     // Logic to update cell movments
     pub fn updateGridMovements(self: *Grid) !void {
-        const alloc = std.heap.page_allocator;
-        var nextGrid = try alloc.alloc(Cell, self.num_rows * self.num_cols);
-        for (self.myButtons, 0..) |c, i| {
-            const neighbors = c.countNeighbors(
-                self.myButtons,
-                self.num_cols,
-                self.num_rows,
-            );
+        var clone = try self.myButtons.clone();
 
-            nextGrid[i] = Cell{
-                .x = c.x,
-                .y = c.y,
-                .alive = c.staysAlive(neighbors),
-            };
+        var it = clone.valueIterator();
+
+        while (it.next()) |c| {
+            const count = c.countNeighbors(self.myButtons);
+            const staysAlive = c.staysAlive(count);
+            c.alive = staysAlive;
         }
-        const oldGrid = self.myButtons;
-        self.myButtons = nextGrid;
-        alloc.free(oldGrid);
+        self.myButtons = clone;
     }
 
     pub fn deinit(self: *Grid) void {
-        self.allocator.free(self.myButtons);
+        self.myButtons.deinit();
     }
 };

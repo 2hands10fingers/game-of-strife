@@ -1,10 +1,3 @@
-/// This is a simple implementation of Conway's Game of Life using Zig and raylib.
-/// /// Controls:
-/// - Space: Start/Stop simulation
-/// - C: Clear grid
-/// - L: Toggle logging
-/// - R: Randomize creating alive cells on the grid
-/// - Esc: Exit game
 const std = @import("std");
 const print = std.debug.print;
 const mem = std.mem;
@@ -24,8 +17,8 @@ pub fn main() !void {
     var isGridOn = true;
     var isFPSShowing = false;
     var gridAllocator = std.heap.page_allocator;
-    const realSceenH = rl.getScreenHeight();
-    const realScrenW = rl.getScreenWidth();
+    const realScreenH = rl.getScreenHeight();
+    const realScreenW = rl.getScreenWidth();
     var gameGrid = try Grid.init(
         400,
         400,
@@ -37,13 +30,10 @@ pub fn main() !void {
     );
     defer gameGrid.deinit();
 
-    rl.initWindow(
-        realScrenW,
-        realSceenH,
-        "GAME OF STRIFE",
-    );
+    rl.initWindow(realScreenW, realScreenH, "GAME OF STRIFE");
     defer rl.closeWindow();
     errdefer rl.closeWindow();
+
     rl.setTargetFPS(60);
 
     // Main game loop
@@ -82,26 +72,28 @@ pub fn main() !void {
 
         // Determines where a cell index has been collided with and handles the collision logic
         if (!runGame) {
-            const index = gameGrid.calculateGridIndex(mouse_pos);
+            const coords = gameGrid.calculateGridCoordinates(mouse_pos);
+            const cell = gameGrid.getCell(coords);
 
-            if (index) |i| {
+            if (cell) |c| {
+                // print("Cell coords: {any}\n", .{c.coords});
                 const mousePosAttrs = gameGrid.calculateCollisionAttributes(
-                    i,
+                    c,
                     mouse_pos,
                 );
 
-                // zig fmt: off
-                const isPaintingOnGrid = (
-                    rl.isMouseButtonDown(.left) and rl.isKeyDown(.d) or 
-                    rl.isMouseButtonPressed(.left));
+                // // zig fmt: off
+                const isPaintingOnGrid =
+                    rl.isMouseButtonDown(.left) and
+                    rl.isKeyDown(.d) or
+                    rl.isMouseButtonPressed(.left);
 
                 gameGrid.executeCollisionLogic(
-                    i,
+                    c,
                     mousePosAttrs,
                 );
 
-                if (isPaintingOnGrid)
-                    gameGrid.myButtons[i].toggleCellLife();
+                if (isPaintingOnGrid) c.toggleCellLife();
             }
         }
 
