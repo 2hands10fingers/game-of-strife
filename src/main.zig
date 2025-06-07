@@ -58,8 +58,7 @@ pub fn main() !void {
             rl.beginDrawing();
             defer rl.endDrawing();
             const divFloorScreenW = @divFloor(rl.getScreenWidth(), 2);
-            const divFloorScreenH = @divFloor(rl.getScreenHeight(), 2); //558
-            // print("Screen width: {d}, Screen height: {d}\n", .{ divFloorScreenW, divFloorScreenH });
+            const divFloorScreenH = @divFloor(rl.getScreenHeight(), 2);
             rl.clearBackground(rl.Color.black);
             rl.drawText("GAME OF STRIFE", divFloorScreenW - 180, divFloorScreenH - 120, 40, rl.Color.red);
             rl.drawText("Press SPACE to start the game", divFloorScreenW - 160, divFloorScreenH - 58, 20, rl.Color.white);
