@@ -16,6 +16,11 @@ const grid = @import("./objects/grid.zig");
 const Cell = automata.Cell;
 const indexing = @import("./utils/indexing.zig");
 const Grid = grid.Grid;
+const AppState = enum {
+    INIT_MENU,
+    GAME,
+};
+var appState = AppState.INIT_MENU;
 
 pub fn main() !void {
     //game states
@@ -48,49 +53,66 @@ pub fn main() !void {
 
     // Main game loop
     while (!rl.windowShouldClose()) {
-        const background = if (isGridOn) rl.Color.gray else rl.Color.black;
-        const mouse_pos = rl.getMousePosition();
-
-        rl.beginDrawing();
-        defer rl.endDrawing();
-        rl.clearBackground(background);
-        // Controls
-        if (rl.isKeyPressed(.space)) { // Press space to start the game
-            runGame = !runGame;
-            isGridOn = if (runGame) false else true;
+        while (!rl.windowShouldClose() and appState == AppState.INIT_MENU) {
+            // Draw the main menu
+            rl.beginDrawing();
+            defer rl.endDrawing();
+            const divFloorScreenW = @divFloor(rl.getScreenWidth(), 2);
+            const divFloorScreenH = @divFloor(rl.getScreenHeight(), 2); //558
+            // print("Screen width: {d}, Screen height: {d}\n", .{ divFloorScreenW, divFloorScreenH });
+            rl.clearBackground(rl.Color.black);
+            rl.drawText("GAME OF STRIFE", divFloorScreenW - 180, divFloorScreenH - 120, 40, rl.Color.red);
+            rl.drawText("Press SPACE to start the game", divFloorScreenW - 160, divFloorScreenH - 58, 20, rl.Color.white);
+            rl.drawText("Press ESC to exit", divFloorScreenW - 104, divFloorScreenH - 18, 20, rl.Color.white);
+            if (rl.isKeyPressed(.space)) {
+                appState = AppState.GAME;
+                break;
+            }
         }
-        if (rl.isKeyPressed(.escape)) // Press Esc to exit the game
-            std.process.exit(1);
-        if (rl.isKeyPressed(.c)) // Press c to clear the grid
-            gameGrid.clearGrid();
-        if (rl.isKeyPressed(.g)) // pess g to toggle grid
-            isGridOn = !isGridOn;
-        if (rl.isKeyPressed(.q)) // pess g to toggle grid
-            gameGrid.toggleRainbowMode();
-        if (rl.isKeyPressed(.f)) // press f to show the FPS
-            isFPSShowing = !isFPSShowing;
-        if (rl.isKeyPressed(.r)) // Press r to randomize the grid
-            gameGrid.addRandomCells();
-        if (isFPSShowing) // Draw FPS
-            rl.drawFPS(0, 0);
-        if (rl.isKeyPressed(.l)) // Press l to toggle logging
-            isLoggingEnabled = !isLoggingEnabled;
+        while (!rl.windowShouldClose() and appState == AppState.GAME) {
+            const background = if (isGridOn) rl.Color.gray else rl.Color.black;
+            const mouse_pos = rl.getMousePosition();
 
-        // Init grid state
-        gameGrid.initialGridPainting();
-        gameGrid.drawGrid();
+            rl.beginDrawing();
+            defer rl.endDrawing();
+            rl.clearBackground(background);
+            // Controls
+            if (rl.isKeyPressed(.space)) { // Press space to start the game
+                runGame = !runGame;
+                isGridOn = if (runGame) false else true;
+            }
+            if (rl.isKeyPressed(.escape)) // Press Esc to exit the game
+                std.process.exit(1);
+            if (rl.isKeyPressed(.c)) // Press c to clear the grid
+                gameGrid.clearGrid();
+            if (rl.isKeyPressed(.g)) // pess g to toggle grid
+                isGridOn = !isGridOn;
+            if (rl.isKeyPressed(.q)) // pess g to toggle grid
+                gameGrid.toggleRainbowMode();
+            if (rl.isKeyPressed(.f)) // press f to show the FPS
+                isFPSShowing = !isFPSShowing;
+            if (rl.isKeyPressed(.r)) // Press r to randomize the grid
+                gameGrid.addRandomCells();
+            if (isFPSShowing) // Draw FPS
+                rl.drawFPS(0, 0);
+            if (rl.isKeyPressed(.l)) // Press l to toggle logging
+                isLoggingEnabled = !isLoggingEnabled;
 
-        // Determines where a cell index has been collided with and handles the collision logic
-        if (!runGame) {
-            const index = gameGrid.calculateGridIndex(mouse_pos);
+            // Init grid state
+            gameGrid.initialGridPainting();
+            gameGrid.drawGrid();
 
-            if (index) |i| {
-                const mousePosAttrs = gameGrid.calculateCollisionAttributes(
-                    i,
-                    mouse_pos,
-                );
+            // Determines where a cell index has been collided with and handles the collision logic
+            if (!runGame) {
+                const index = gameGrid.calculateGridIndex(mouse_pos);
 
-                // zig fmt: off
+                if (index) |i| {
+                    const mousePosAttrs = gameGrid.calculateCollisionAttributes(
+                        i,
+                        mouse_pos,
+                    );
+
+                    // zig fmt: off
                 const isPaintingOnGrid = (
                     rl.isMouseButtonDown(.left) and rl.isKeyDown(.d) or 
                     rl.isMouseButtonPressed(.left));
@@ -107,6 +129,7 @@ pub fn main() !void {
 
         if (runGame) {
             try gameGrid.updateGridMovements();
+        }
         }
     }
 }
