@@ -5,7 +5,11 @@ Conway's Game of Life written in Zig with some added rules.
 > [!WARNING]  
 > Currently only implementing Conway's Game of Life. No added rules at this time of development.
 
-[game-of-strife-presentation.webm](https://github.com/user-attachments/assets/15e8207a-7996-4192-b407-12b375d373a5)
+
+
+https://github.com/user-attachments/assets/01a2b0ca-0ef9-4d1b-8537-9332df176f27
+
+
 
 ## Installation
 
