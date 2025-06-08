@@ -20,6 +20,8 @@ pub const Grid = struct {
     cell_height: i32,
     allocator: *std.mem.Allocator,
     rainbowMode: bool = false,
+    cellsDead: u32 = 0,
+    cellsAlive: u32 = 0,
 
     pub fn init(
         rowCount: comptime_int,
@@ -241,12 +243,18 @@ pub const Grid = struct {
                 self.num_cols,
                 self.num_rows,
             );
-
+            const staysAlive = c.staysAlive(neighbors);
             nextGrid[i] = Cell{
                 .x = c.x,
                 .y = c.y,
-                .alive = c.staysAlive(neighbors),
+                .alive = staysAlive,
             };
+
+            if (staysAlive) {
+                self.cellsAlive += 1;
+            } else {
+                self.cellsDead += 1;
+            }
         }
         const oldGrid = self.myButtons;
         self.myButtons = nextGrid;

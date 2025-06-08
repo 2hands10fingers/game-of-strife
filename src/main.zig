@@ -15,12 +15,20 @@ const automata = @import("/objects/automata.zig");
 const grid = @import("./objects/grid.zig");
 const Cell = automata.Cell;
 const indexing = @import("./utils/indexing.zig");
+const displayScore = @import("./visual/score.zig").displayScore;
 const Grid = grid.Grid;
 const AppState = enum {
     INIT_MENU,
     GAME,
 };
 var appState = AppState.INIT_MENU;
+const scoreAllocator = std.heap.page_allocator;
+
+fn concatAndReturnBuffer(allocator: *std.mem.Allocator, one: []const u8, two: []const u8) !std.Buffer {
+    var b = try std.Buffer.init(allocator, one);
+    try b.append(two);
+    return b;
+}
 
 pub fn main() !void {
     //game states
@@ -128,7 +136,8 @@ pub fn main() !void {
 
         if (runGame) {
             try gameGrid.updateGridMovements();
-        }
+            displayScore(gameGrid.cellsDead, gameGrid.cellsAlive);
+            }
         }
     }
 }
