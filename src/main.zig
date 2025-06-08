@@ -16,7 +16,7 @@ pub fn main() !void {
     var isLoggingEnabled = false;
     var isGridOn = true;
     var isFPSShowing = false;
-    var gridAllocator = std.heap.page_allocator;
+    var gridAllocator = std.heap.c_allocator;
     const realScreenH = rl.getScreenHeight();
     const realScreenW = rl.getScreenWidth();
     var gameGrid = try Grid.init(
