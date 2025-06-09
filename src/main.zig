@@ -16,6 +16,8 @@ const grid = @import("./objects/grid.zig");
 const Cell = automata.Cell;
 const indexing = @import("./utils/indexing.zig");
 const displayScore = @import("./visual/score.zig").displayScore;
+const loggingDialog = @import("./utils/logging-dialog.zig").displayLogginDialog;
+const cursors = @import("./visual/cursors.zig");
 const Grid = grid.Grid;
 const AppState = enum {
     INIT_MENU,
@@ -82,6 +84,7 @@ pub fn main() !void {
 
             rl.beginDrawing();
             defer rl.endDrawing();
+            rl.hideCursor();
             rl.clearBackground(background);
             // Controls
             if (rl.isKeyPressed(.space)) { // Press space to start the game
@@ -119,6 +122,10 @@ pub fn main() !void {
                         mouse_pos,
                     );
 
+                    if (isLoggingEnabled) {
+                        loggingDialog(i, gameGrid, mouse_pos);
+                    }
+
                     // zig fmt: off
                 const isPaintingOnGrid = (
                     rl.isMouseButtonDown(.left) and rl.isKeyDown(.d) or 
@@ -129,6 +136,8 @@ pub fn main() !void {
                     mousePosAttrs,
                 );
 
+                cursors.displatMainCursor(mouse_pos);
+                
                 if (isPaintingOnGrid)
                     gameGrid.myButtons[i].toggleCellLife();
             }
