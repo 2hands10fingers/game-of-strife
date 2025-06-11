@@ -2,12 +2,12 @@ const rl = @import("raylib");
 const Grid = @import("../objects/grid.zig").Grid;
 const std = @import("std");
 
-pub fn displayLogginDialog(i: usize, gameGrid: Grid, mouse_pos: rl.Vector2) void {
+pub fn displayLogginDialog(i: usize, gameGrid: *Grid, mouse_pos: rl.Vector2) void {
     const yInt = @as(i32, @intFromFloat(mouse_pos.y));
     const xInt = @as(i32, @intFromFloat(mouse_pos.x));
-    const cell = gameGrid.myButtons[i];
+    const cell = gameGrid.girdCells[i];
     var buffer: [200]u8 = undefined;
-    const neighorCount = cell.countNeighbors(gameGrid.myButtons, gameGrid.num_cols, gameGrid.num_rows);
+    const neighorCount = cell.countNeighbors(gameGrid.girdCells, gameGrid.num_cols, gameGrid.num_rows);
     const cellShouldStayAlive = cell.staysAlive(neighorCount);
     const meta = std.fmt.bufPrintZ(&buffer, "Mouse Position: {d}, {d}\nGrid Box Position: ( x:{d}, y:{d} )\nCell neighbors: {d}\nCell should stay alive: {any}\nIs alive: {any}", .{
         mouse_pos.x,
