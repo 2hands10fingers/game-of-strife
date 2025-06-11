@@ -1,60 +1,14 @@
 /// This is a simple implementation of Conway's Game of Life using Zig and raylib.
-/// /// Controls:
-/// - Space: Start/Stop simulation
-/// - C: Clear grid
-/// - L: Toggle logging
-/// - R: Randomize creating alive cells on the grid
-/// - Esc: Exit game
-const std = @import("std");
-const print = std.debug.print;
-const mem = std.mem;
-const os = std.os;
+const exit = @import("std").process.exit;
 const rl = @import("raylib");
-const random = std.crypto.random;
-const automata = @import("/objects/automata.zig");
-const grid = @import("./objects/grid.zig");
-const Cell = automata.Cell;
-const indexing = @import("./utils/indexing.zig");
-const displayScore = @import("./visual/score.zig").displayScore;
-const loggingDialog = @import("./utils/logging-dialog.zig").displayLogginDialog;
-const cursors = @import("./visual/cursors.zig");
-const Grid = grid.Grid;
-const AppState = enum {
-    INIT_MENU,
-    GAME,
-};
-var appState = AppState.INIT_MENU;
-const scoreAllocator = std.heap.page_allocator;
-
-fn concatAndReturnBuffer(allocator: *std.mem.Allocator, one: []const u8, two: []const u8) !std.Buffer {
-    var b = try std.Buffer.init(allocator, one);
-    try b.append(two);
-    return b;
-}
+const displayGameMenu = @import("./visual/game-menu.zig").displayGameMenu;
+const gameState = @import("./states/game.zig").gameState;
 
 pub fn main() !void {
-    //game states
-    var runGame = false;
-    var isLoggingEnabled = false;
-    var isGridOn = true;
-    var isFPSShowing = false;
-    var gridAllocator = std.heap.page_allocator;
-    const realSceenH = rl.getScreenHeight();
-    const realScrenW = rl.getScreenWidth();
-    var gameGrid = try Grid.init(
-        400,
-        400,
-        1,
-        4,
-        4,
-        30500,
-        &gridAllocator,
-    );
-    defer gameGrid.deinit();
-
+    var appState: u2 = 1;
     rl.initWindow(
-        realScrenW,
-        realSceenH,
+        rl.getScreenWidth(),
+        rl.getScreenHeight(),
         "GAME OF STRIFE",
     );
     defer rl.closeWindow();
@@ -63,90 +17,11 @@ pub fn main() !void {
 
     // Main game loop
     while (!rl.windowShouldClose()) {
-        while (!rl.windowShouldClose() and appState == AppState.INIT_MENU) {
-            // Draw the main menu
-            rl.beginDrawing();
-            defer rl.endDrawing();
-            const divFloorScreenW = @divFloor(rl.getScreenWidth(), 2);
-            const divFloorScreenH = @divFloor(rl.getScreenHeight(), 2);
-            rl.clearBackground(rl.Color.black);
-            rl.drawText("GAME OF STRIFE", divFloorScreenW - 180, divFloorScreenH - 120, 40, rl.Color.red);
-            rl.drawText("Press SPACE to start the game", divFloorScreenW - 160, divFloorScreenH - 58, 20, rl.Color.white);
-            rl.drawText("Press ESC to exit", divFloorScreenW - 104, divFloorScreenH - 18, 20, rl.Color.white);
-            if (rl.isKeyPressed(.space)) {
-                appState = AppState.GAME;
-                break;
-            }
-        }
-        while (!rl.windowShouldClose() and appState == AppState.GAME) {
-            const background = if (isGridOn) rl.Color.gray else rl.Color.black;
-            const mouse_pos = rl.getMousePosition();
+        if (rl.isKeyPressed(.escape)) // Press Esc to exit the game
+            exit(1);
 
-            rl.beginDrawing();
-            defer rl.endDrawing();
-            rl.hideCursor();
-            rl.clearBackground(background);
-            // Controls
-            if (rl.isKeyPressed(.space)) { // Press space to start the game
-                runGame = !runGame;
-                isGridOn = if (runGame) false else true;
-            }
-            if (rl.isKeyPressed(.escape)) // Press Esc to exit the game
-                std.process.exit(1);
-            if (rl.isKeyPressed(.c)) // Press c to clear the grid
-                gameGrid.clearGrid();
-            if (rl.isKeyPressed(.g)) // pess g to toggle grid
-                isGridOn = !isGridOn;
-            if (rl.isKeyPressed(.q)) // pess g to toggle grid
-                gameGrid.toggleRainbowMode();
-            if (rl.isKeyPressed(.f)) // press f to show the FPS
-                isFPSShowing = !isFPSShowing;
-            if (rl.isKeyPressed(.r)) // Press r to randomize the grid
-                gameGrid.addRandomCells();
-            if (isFPSShowing) // Draw FPS
-                rl.drawFPS(0, 0);
-            if (rl.isKeyPressed(.l)) // Press l to toggle logging
-                isLoggingEnabled = !isLoggingEnabled;
-
-            // Init grid state
-            gameGrid.initialGridPainting();
-            gameGrid.drawGrid();
-
-            // Determines where a cell index has been collided with and handles the collision logic
-            if (!runGame) {
-                const index = gameGrid.calculateGridIndex(mouse_pos);
-
-                if (index) |i| {
-                    const mousePosAttrs = gameGrid.calculateCollisionAttributes(
-                        i,
-                        mouse_pos,
-                    );
-
-                    if (isLoggingEnabled) {
-                        loggingDialog(i, gameGrid, mouse_pos);
-                    }
-
-                    // zig fmt: off
-                const isPaintingOnGrid = (
-                    rl.isMouseButtonDown(.left) and rl.isKeyDown(.d) or 
-                    rl.isMouseButtonPressed(.left));
-
-                gameGrid.executeCollisionLogic(
-                    i,
-                    mousePosAttrs,
-                );
-
-                cursors.displatMainCursor(mouse_pos);
-                
-                if (isPaintingOnGrid)
-                    gameGrid.myButtons[i].toggleCellLife();
-            }
-        }
-
-        if (runGame) {
-            try gameGrid.updateGridMovements();
-            displayScore(gameGrid.cellsDead, gameGrid.cellsAlive);
-            }
-        }
+        //STATES
+        displayGameMenu(&appState);
+        try gameState(&appState);
     }
 }

@@ -14,7 +14,8 @@ pub const Grid = struct {
     num_rows: u64,
     num_cols: u64,
     cells_to_add: u64,
-    myButtons: []Cell,
+    girdCells: []Cell,
+    girdCellsNext: []Cell,
     padding: i32,
     cell_width: i32,
     cell_height: i32,
@@ -35,7 +36,8 @@ pub const Grid = struct {
         std.debug.assert(rowCount == colCount);
         const total = rowCount * colCount;
         const buttons = try allocator.alloc(Cell, total);
-        // var buttons: [rowCount * colCount]Cell = undefined;
+        const buttonsNext = try allocator.alloc(Cell, total);
+
         for (0..rowCount) |row| {
             for (0..colCount) |col| {
                 const index = col * colCount + row;
@@ -45,11 +47,17 @@ pub const Grid = struct {
                     .y = @as(i32, @intCast(col)),
                     .alive = false,
                 };
+                buttonsNext[index] = Cell{
+                    .x = @as(i32, @intCast(row)),
+                    .y = @as(i32, @intCast(col)),
+                    .alive = false,
+                };
             }
         }
 
         return .{
-            .myButtons = buttons,
+            .girdCells = buttons,
+            .girdCellsNext = buttonsNext,
             .num_rows = rowCount,
             .num_cols = colCount,
             .padding = padding,
@@ -70,12 +78,12 @@ pub const Grid = struct {
             mousePosAttributes.vectorPosition,
             mousePosAttributes.rectangle,
         );
-        const x = self.myButtons[cellIndex].x;
-        const y = self.myButtons[cellIndex].y;
+        const x = self.girdCells[cellIndex].x;
+        const y = self.girdCells[cellIndex].y;
         const cellPosX = self.calculatePosition(y, self.cell_width);
         const cellPosY = self.calculatePosition(x, self.cell_height);
 
-        const isCellDead = !self.myButtons[cellIndex].alive;
+        const isCellDead = !self.girdCells[cellIndex].alive;
         const cellColor = if (hasCollision and isCellDead) rl.Color.red else rl.Color.black;
 
         rl.drawRectangle(
@@ -155,7 +163,7 @@ pub const Grid = struct {
     }
 
     pub fn drawGrid(self: *Grid) void {
-        for (self.myButtons) |c| {
+        for (self.girdCells) |c| {
             const cellPosX = self.calculatePosition(c.y, self.cell_width);
             const cellPosY = self.calculatePosition(c.x, self.cell_height);
 
@@ -180,8 +188,8 @@ pub const Grid = struct {
     }
 
     pub fn clearGrid(self: *Grid) void {
-        for (self.myButtons, 0..) |c, i| {
-            self.myButtons[i] = .{
+        for (self.girdCells, 0..) |c, i| {
+            self.girdCells[i] = .{
                 .x = c.x,
                 .y = c.y,
                 .alive = false,
@@ -205,8 +213,8 @@ pub const Grid = struct {
         // const initial_cell_count = self.cells_to_add;
         var cells_to_add = self.cells_to_add;
         std.debug.print("{d}", .{cells_to_add});
-        for (self.myButtons, 0..) |c, i| {
-            self.myButtons[i] = .{
+        for (self.girdCells, 0..) |c, i| {
+            self.girdCells[i] = .{
                 .x = c.x,
                 .y = c.y,
                 .alive = false,
@@ -226,8 +234,8 @@ pub const Grid = struct {
             );
             const index = row * self.num_cols + col;
 
-            if (!self.myButtons[index].alive) {
-                self.myButtons[index].alive = true;
+            if (!self.girdCells[index].alive) {
+                self.girdCells[index].alive = true;
                 cells_to_add -= 1;
             }
         }
@@ -235,16 +243,14 @@ pub const Grid = struct {
 
     // Logic to update cell movments
     pub fn updateGridMovements(self: *Grid) !void {
-        const alloc = std.heap.page_allocator;
-        var nextGrid = try alloc.alloc(Cell, self.num_rows * self.num_cols);
-        for (self.myButtons, 0..) |c, i| {
+        for (self.girdCells, 0..) |c, i| {
             const neighbors = c.countNeighbors(
-                self.myButtons,
+                self.girdCells,
                 self.num_cols,
                 self.num_rows,
             );
             const staysAlive = c.staysAlive(neighbors);
-            nextGrid[i] = Cell{
+            self.girdCellsNext[i] = Cell{
                 .x = c.x,
                 .y = c.y,
                 .alive = staysAlive,
@@ -256,12 +262,16 @@ pub const Grid = struct {
                 self.cellsDead += 1;
             }
         }
-        const oldGrid = self.myButtons;
-        self.myButtons = nextGrid;
-        alloc.free(oldGrid);
+        // optimization updating cell state.
+        std.mem.swap(
+            []Cell,
+            &self.girdCells,
+            &self.girdCellsNext,
+        );
     }
 
     pub fn deinit(self: *Grid) void {
-        self.allocator.free(self.myButtons);
+        self.allocator.free(self.girdCells);
+        self.allocator.free(self.girdCellsNext);
     }
 };
